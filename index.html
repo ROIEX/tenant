@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rent Tracker</title>
+<style>
+:root{--bg:#eef2f0;--surface:#fff;--ink:#17302b;--muted:#5d726c;--line:#d3ddd9;--accent:#2f6f5e;--accent-ink:#fff;--late:#b3402a;--late-bg:#f8e4de;--ok-bg:#dcefe8;--wait-bg:#e8ecea;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#0f1b18;--surface:#172723;--ink:#e3eeea;--muted:#9bb0a9;--line:#2b403a;--accent:#5fb89e;--accent-ink:#0b1a16;--late:#f08a74;--late-bg:#3a201a;--ok-bg:#1c3a31;--wait-bg:#22332e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:860px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:28px;margin:0 0 4px;letter-spacing:-.02em}
+h2{font-size:18px;margin:32px 0 10px}
+.sub{color:var(--muted);margin:0 0 20px}
+.bar{display:flex;align-items:center;gap:8px;margin-bottom:16px}
+.bar button{width:40px;height:40px;font-size:18px}
+.bar strong{flex:1;text-align:center;font-size:18px}
+.summary,.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px}
+.big{font-size:40px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
+.big small{font-size:16px;font-weight:500;color:var(--muted);letter-spacing:0}
+.track{height:12px;border-radius:6px;background:var(--wait-bg);margin:12px 0;overflow:hidden}
+.fill{height:100%;background:var(--accent);transition:width .4s ease}
+.stats{display:flex;gap:24px;flex-wrap:wrap;color:var(--muted)}
+.stats b{color:var(--ink)}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);min-width:520px}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:14px;color:var(--muted);font-weight:500}
+tr:last-child td{border-bottom:0}
+.num{text-align:right}
+.pill{display:inline-block;padding:4px 12px;border-radius:999px;font:500 14px system-ui,sans-serif;border:0;cursor:pointer;min-height:32px}
+.pill.paid,.pill.done{background:var(--ok-bg);color:var(--accent)}
+.pill.late,.pill.progress{background:var(--late-bg);color:var(--late)}
+.pill.due,.pill.open{background:var(--wait-bg);color:var(--muted)}
+form{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:10px}
+input,textarea{font:inherit;color:var(--ink);padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);min-height:40px;width:100%}
+button{font:inherit;color:var(--ink);border:1px solid var(--line);background:var(--surface);border-radius:8px;cursor:pointer;padding:8px 14px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700;min-height:40px}
+button.x{border:0;background:none;color:var(--muted);font-size:18px;padding:2px 8px}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.empty{padding:18px;color:var(--muted);background:var(--surface);border:1px dashed var(--line);border-radius:12px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+#login{max-width:380px;margin:60px auto}
+#login form{display:flex;flex-direction:column}
+.err{color:var(--late);min-height:1.5em}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+
+<section id="setup" class="card" hidden>
+<h1>Setup needed</h1>
+<p>Open <b>index.html</b> in GitHub and replace the PASTE_ values near the top of the script with your Firebase settings.</p>
+</section>
+
+<section id="login" class="card" hidden>
+<h1>Rent tracker</h1>
+<p class="sub">Sign in to see your data.</p>
+<form id="lform">
+<input id="em" type="email" placeholder="Email" autocomplete="username" required aria-label="Email">
+<input id="pw" type="password" placeholder="Password" autocomplete="current-password" required aria-label="Password">
+<button class="primary" type="submit">Sign in</button>
+</form>
+<p class="err" id="lerr" role="alert"></p>
+</section>
+
+<div id="app" hidden>
+<div class="top"><div><h1>Rent tracker</h1><p class="sub">Saved to your account, the same in every browser.</p></div>
+<div class="row"><button id="csv" type="button">Export CSV</button><button id="out" type="button">Sign out</button></div></div>
+<p id="msg" class="sub" role="status"></p>
+
+<div class="bar"><button id="prev" type="button" aria-label="Previous month">‹</button><strong id="month"></strong><button id="next" type="button" aria-label="Next month">›</button></div>
+
+<section class="summary" aria-live="polite">
+<div class="big" id="collected"></div>
+<div class="track"><div class="fill" id="fill" style="width:0"></div></div>
+<div class="stats" id="stats"></div>
+</section>
+
+<h2>Tenants</h2>
+<div id="tenants"></div>
+<form id="tform">
+<input name="name" placeholder="Tenant name" required aria-label="Tenant name">
+<input name="unit" placeholder="Unit" required aria-label="Unit">
+<input name="rent" type="number" min="0" step="1" placeholder="Rent ($)" required aria-label="Monthly rent">
+<input name="due" type="number" min="1" max="28" value="1" required aria-label="Due day of month">
+<button class="primary" type="submit">Add tenant</button>
+</form>
+
+<h2>Repairs</h2>
+<div id="repairs"></div>
+<form id="rform">
+<input name="date" type="date" required aria-label="Date">
+<input name="unit" placeholder="Unit" required aria-label="Unit">
+<input name="issue" placeholder="What needs fixing" required aria-label="Issue">
+<input name="cost" type="number" min="0" step="0.01" placeholder="Cost ($)" aria-label="Cost">
+<button class="primary" type="submit">Add repair</button>
+</form>
+
+<details style="margin-top:32px"><summary style="cursor:pointer;color:var(--muted)">Load data from an old backup</summary>
+<textarea id="ta" rows="5" aria-label="Backup text" placeholder="Paste backup text here, then tap Load." style="margin-top:8px;font:13px/1.4 ui-monospace,monospace"></textarea>
+<div class="row" style="margin-top:8px"><button id="ld" class="primary" type="button">Load</button></div></details>
+</div>
+
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+// 1) PASTE YOUR FIREBASE SETTINGS HERE (from Firebase console > Project settings > Your apps)
+var firebaseConfig={
+  apiKey:"PASTE_API_KEY",
+  authDomain:"PASTE_PROJECT_ID.firebaseapp.com",
+  projectId:"PASTE_PROJECT_ID",
+  appId:"PASTE_APP_ID"
+};
+
+(function(){
+function $(id){return document.getElementById(id);}
+function esc(s){var d=document.createElement("div");d.textContent=s;return d.innerHTML;}
+function money(n){return "$"+Number(n).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:2});}
+function mkey(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+function note(t){$("msg").textContent=t;}
+
+if(firebaseConfig.apiKey.indexOf("PASTE")===0){$("setup").hidden=false;return;}
+firebase.initializeApp(firebaseConfig);
+var auth=firebase.auth(),db=firebase.firestore();
+var S={tenants:[],paid:{},repairs:[]},ref=null,unsub=null,cur=new Date();
+cur=new Date(cur.getFullYear(),cur.getMonth(),1);
+
+function norm(d){return {tenants:d.tenants||[],paid:d.paid||{},repairs:d.repairs||[]};}
+function save(){if(ref)ref.set(S).catch(function(e){note("Could not save ("+e.code+"). Check your connection and rules.");});}
+
+auth.onAuthStateChanged(function(u){
+  if(unsub){unsub();unsub=null;}
+  if(!u){ref=null;$("app").hidden=true;$("login").hidden=false;return;}
+  $("login").hidden=true;$("app").hidden=false;
+  ref=db.doc("users/"+u.uid+"/data/main");
+  unsub=ref.onSnapshot(function(snap){S=snap.exists?norm(snap.data()):{tenants:[],paid:{},repairs:[]};render();},
+    function(e){note("Could not load data ("+e.code+"). Check the Firestore rules.");});
+});
+
+$("lform").addEventListener("submit",function(e){
+  e.preventDefault();$("lerr").textContent="";
+  auth.signInWithEmailAndPassword($("em").value.trim(),$("pw").value).catch(function(err){
+    $("lerr").textContent="Sign in failed ("+err.code+").";
+  });
+});
+$("out").onclick=function(){auth.signOut();};
+
+function state(t){
+  var k=mkey(cur);
+  if(S.paid[k]&&S.paid[k][t.id])return "paid";
+  var due=new Date(cur.getFullYear(),cur.getMonth(),t.due,23,59,59);
+  return new Date()>due?"late":"due";
+}
+var LABEL={paid:"Paid",late:"Late",due:"Due"};
+
+function render(){
+  $("month").textContent=cur.toLocaleDateString(undefined,{month:"long",year:"numeric"});
+  var exp=0,got=0,late=0;
+  S.tenants.forEach(function(t){var s=state(t);exp+=+t.rent;if(s==="paid")got+=+t.rent;if(s==="late")late++;});
+  $("collected").innerHTML=money(got)+" <small>of "+money(exp)+" collected</small>";
+  $("fill").style.width=(exp?Math.round(got/exp*100):0)+"%";
+  $("stats").innerHTML="<span>Outstanding <b>"+money(exp-got)+"</b></span><span>Late <b>"+late+"</b></span><span>Tenants <b>"+S.tenants.length+"</b></span>";
+  if(!S.tenants.length){$("tenants").innerHTML='<div class="empty">No tenants yet. Add one below to start tracking rent.</div>';}
+  else{
+    var h='<div class="scroll"><table><thead><tr><th>Tenant</th><th>Unit</th><th class="num">Rent</th><th>Due</th><th>This month</th><th></th></tr></thead><tbody>';
+    S.tenants.forEach(function(t){
+      var s=state(t);
+      h+="<tr><td>"+esc(t.name)+"</td><td>"+esc(t.unit)+'</td><td class="num">'+money(t.rent)+"</td><td>Day "+t.due+'</td><td><button type="button" class="pill '+s+'" data-pay="'+t.id+'" aria-label="Toggle paid for '+esc(t.name)+'">'+LABEL[s]+'</button></td><td><button type="button" class="x" data-deltenant="'+t.id+'" aria-label="Remove '+esc(t.name)+'">×</button></td></tr>';
+    });
+    $("tenants").innerHTML=h+"</tbody></table></div>";
+  }
+  if(!S.repairs.length){$("repairs").innerHTML='<div class="empty">No repairs logged. Add one below to keep a record.</div>';}
+  else{
+    var r='<div class="scroll"><table><thead><tr><th>Date</th><th>Unit</th><th>Issue</th><th class="num">Cost</th><th>Status</th><th></th></tr></thead><tbody>';
+    S.repairs.slice().sort(function(a,b){return a.date<b.date?1:-1;}).forEach(function(x){
+      r+="<tr><td>"+esc(x.date)+"</td><td>"+esc(x.unit)+"</td><td>"+esc(x.issue)+'</td><td class="num">'+(x.cost?money(x.cost):"–")+'</td><td><button type="button" class="pill '+x.status+'" data-rs="'+x.id+'">'+{open:"Open",progress:"In progress",done:"Done"}[x.status]+'</button></td><td><button type="button" class="x" data-delrep="'+x.id+'" aria-label="Remove repair">×</button></td></tr>';
+    });
+    $("repairs").innerHTML=r+"</tbody></table></div>";
+  }
+}
+
+$("prev").onclick=function(){cur=new Date(cur.getFullYear(),cur.getMonth()-1,1);render();};
+$("next").onclick=function(){cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);render();};
+
+document.addEventListener("click",function(e){
+  var b=e.target.closest("button");if(!b||!ref)return;
+  var k=mkey(cur);
+  if(b.dataset.pay){S.paid[k]=S.paid[k]||{};S.paid[k][b.dataset.pay]=!S.paid[k][b.dataset.pay];}
+  else if(b.dataset.deltenant){S.tenants=S.tenants.filter(function(t){return t.id!==b.dataset.deltenant;});}
+  else if(b.dataset.rs){S.repairs.forEach(function(x){if(x.id===b.dataset.rs){x.status={open:"progress",progress:"done",done:"open"}[x.status];}});}
+  else if(b.dataset.delrep){S.repairs=S.repairs.filter(function(x){return x.id!==b.dataset.delrep;});}
+  else return;
+  save();render();
+});
+
+$("tform").addEventListener("submit",function(e){
+  e.preventDefault();var f=e.target;
+  S.tenants.push({id:uid(),name:f.name.value.trim(),unit:f.unit.value.trim(),rent:+f.rent.value,due:+f.due.value||1});
+  f.reset();f.due.value=1;save();render();
+});
+$("rform").addEventListener("submit",function(e){
+  e.preventDefault();var f=e.target;
+  S.repairs.push({id:uid(),date:f.date.value,unit:f.unit.value.trim(),issue:f.issue.value.trim(),cost:+f.cost.value||0,status:"open"});
+  f.reset();save();render();
+});
+
+function q(v){return '"'+String(v).replace(/"/g,'""')+'"';}
+$("csv").onclick=function(){
+  var rows=[["Section","Name or date","Unit","Detail","Amount","Status"]],k=mkey(cur);
+  S.tenants.forEach(function(t){rows.push(["Rent "+k,t.name,t.unit,"Due day "+t.due,t.rent,LABEL[state(t)]]);});
+  S.repairs.forEach(function(x){rows.push(["Repair",x.date,x.unit,x.issue,x.cost,x.status]);});
+  var csv=rows.map(function(r){return r.map(q).join(",");}).join("\n");
+  var a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download="rent-tracker.csv";
+  document.body.appendChild(a);a.click();a.remove();
+};
+
+$("ld").onclick=function(){
+  try{
+    var d=JSON.parse($("ta").value.trim());
+    if(!d||!Array.isArray(d.tenants)||!Array.isArray(d.repairs)||typeof d.paid!=="object")throw 0;
+    if(!confirm("Replace the saved data with this backup?"))return;
+    S=norm(d);save();render();$("ta").value="";
+    note("Loaded "+S.tenants.length+" tenants and "+S.repairs.length+" repairs.");
+  }catch(err){note("That text isn\u2019t Rent Tracker data. Paste the full backup text.");}
+};
+render();
+})();
+</script>
+</body>
+</html>
